@@ -20,6 +20,55 @@ HERMES_SSH_PORT=2222
 HERMES_SSH_PASSWORD=change-this-long-password
 ```
 
+## Coolify Deployment
+
+Create a new Docker Compose resource in Coolify and use these settings:
+
+```text
+Repository URL: https://github.com/Stefan-Cyris/Hermes
+Branch: main
+Build Pack: Docker Compose
+Base Directory: /
+Docker Compose Location: /docker-compose.yml
+Is it a static site?: No
+```
+
+If Coolify expects the compose path without a leading slash, use:
+
+```text
+docker-compose.yml
+```
+
+Do not deploy this as a Nixpacks app on port 3000. This repository runs a
+Docker Compose stack with the Hermes box and a PostgreSQL sidecar.
+
+Required Coolify environment variables:
+
+```env
+TS_AUTHKEY=tskey-auth-...
+TS_HOSTNAME=hermes
+HERMES_POSTGRES_USER=hermes
+HERMES_POSTGRES_PASSWORD=change-this-long-password
+HERMES_POSTGRES_DB=hermes
+HERMES_SSH_PORT=2222
+```
+
+Optional SSH password fallback:
+
+```env
+HERMES_SSH_PASSWORD=change-this-long-password
+```
+
+Tailscale needs these container options. They are already defined in
+`docker-compose.yml`:
+
+```text
+--cap-add=NET_ADMIN --cap-add=NET_RAW --device=/dev/net/tun:/dev/net/tun --tmpfs=/run --tmpfs=/tmp
+```
+
+Only add them as custom Docker options in Coolify if your Coolify setup does
+not apply the Compose `cap_add`, `devices`, or `tmpfs` settings.
+
 ## Local Start
 
 ```powershell
