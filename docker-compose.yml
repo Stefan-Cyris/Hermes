@@ -1,0 +1,88 @@
+#
+# Docker Compose for the Hermes remote box.
+#
+# Deploy via Coolify as a Docker Compose resource, or manually:
+#   docker compose up -d --build
+#
+# Required env vars:
+#   TS_AUTHKEY  — reusable Tailscale auth key from https://login.tailscale.com/admin/settings/keys
+#
+# Optional env vars:
+#   TS_HOSTNAME             — Tailscale hostname, defaults to hermes
+#   HERMES_SSH_PORT         — localhost OpenSSH fallback port, defaults to 2222
+#   HERMES_POSTGRES_USER    — defaults to hermes
+#   HERMES_POSTGRES_PASSWORD — defaults to hermes_dev
+#   HERMES_POSTGRES_DB      — defaults to hermes
+#   HERMES_SSH_PASSWORD     — optional localhost OpenSSH fallback password
+#
+# Dashboard binds to 127.0.0.1 inside the Hermes box. Reach it with an SSH
+# tunnel, for example:
+#   ssh -L 9119:127.0.0.1:9119 hermes@<tailscale-host>
+#
+services:
+  hermes:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hermes-prod:local
+    container_name: hermes
+    hostname: hermes
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    tmpfs:
+      - /run
+      - /tmp
+    ports:
+      - "127.0.0.1:${HERMES_SSH_PORT:-2222}:22"
+    volumes:
+      - hermes-data:/opt/data
+      - hermes-tailscale-state:/var/lib/tailscale
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:?set TS_AUTHKEY}
+      TS_HOSTNAME: ${TS_HOSTNAME:-hermes}
+      TZ: Europe/Berlin
+      HERMES_HOME: /opt/data
+      HERMES_POSTGRES_HOST: postgres
+      HERMES_POSTGRES_PORT: 5432
+      HERMES_POSTGRES_USER: ${HERMES_POSTGRES_USER:-hermes}
+      HERMES_POSTGRES_PASSWORD: ${HERMES_POSTGRES_PASSWORD:-hermes_dev} # pragma: allowlist secret
+      HERMES_POSTGRES_DB: ${HERMES_POSTGRES_DB:-hermes}
+      HERMES_DATABASE_URL: postgresql://${HERMES_POSTGRES_USER:-hermes}:${HERMES_POSTGRES_PASSWORD:-hermes_dev}@postgres:5432/${HERMES_POSTGRES_DB:-hermes} # pragma: allowlist secret
+      HERMES_SSH_PASSWORD: ${HERMES_SSH_PASSWORD:-} # pragma: allowlist secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "tailscale", "status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: hermes-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${HERMES_POSTGRES_USER:-hermes}
+      POSTGRES_PASSWORD: ${HERMES_POSTGRES_PASSWORD:-hermes_dev} # pragma: allowlist secret
+      POSTGRES_DB: ${HERMES_POSTGRES_DB:-hermes}
+    volumes:
+      - hermes-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  hermes-data:
+  hermes-tailscale-state:
+  hermes-postgres-data:
