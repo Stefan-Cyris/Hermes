@@ -41,6 +41,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         fonts-liberation \
         xdg-utils \
         xz-utils \
+        poppler-utils \
+        libmagic1 \
+        tesseract-ocr \
+        tesseract-ocr-deu \
+        tesseract-ocr-eng \
+        ocrmypdf \
+        ghostscript \
+        qpdf \
+        unpaper \
+        imagemagick \
     && locale-gen de_DE.UTF-8 \
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
     && echo $TZ > /etc/timezone \
@@ -93,6 +103,17 @@ RUN mkdir -p /opt/data /opt/hermes \
     && echo "hermes ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/hermes \
     && chmod 0440 /etc/sudoers.d/hermes \
     && chown -R hermes:hermes /opt/data
+
+# Python virtualenvs for Hermes tooling. Built into /opt/venvs (outside the
+# /opt/data volume) so they are baked into the image instead of being shadowed
+# by the mounted volume at runtime. Use e.g. /opt/venvs/mnemosyne/bin/python.
+RUN mkdir -p /opt/venvs \
+    && python3 -m venv /opt/venvs/mnemosyne \
+    && /opt/venvs/mnemosyne/bin/pip install --no-cache-dir --upgrade pip mnemosyne-memory \
+    && python3 -m venv /opt/venvs/pymupdf \
+    && /opt/venvs/pymupdf/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/venvs/pymupdf/bin/pip install --no-cache-dir pymupdf pymupdf4llm python-docx \
+    && chown -R hermes:hermes /opt/venvs
 
 # Configure hermes user. These lines are also kept in /etc/skel for persisted
 # volumes created by older image versions.
