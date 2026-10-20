@@ -89,3 +89,20 @@ Install Hermes as the `hermes` user:
 ```bash
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 ```
+
+## Troubleshooting: Container Keeps Restarting
+
+If the Hermes container keeps restarting, check its logs for a Tailscale
+authentication error, such as `invalid key: API key does not exist`. A missing,
+expired, revoked, or already-used one-off Tailscale auth key can prevent startup.
+The startup script exits when `tailscale up` fails, causing the container to restart.
+
+Generate a new **auth key** (not an API access token) at
+[Tailscale Admin Console → Keys](https://login.tailscale.com/admin/settings/keys).
+Choose **Reusable** for this setup, replace `TS_AUTHKEY` in the Hermes resource's
+Coolify environment variables with the complete key, then save and redeploy.
+Do not commit the key to this repository.
+
+If `TS_AUTHKEY` is missing entirely, Compose may reject the deployment before the
+container starts. If the logs show a different error, investigate that error
+rather than assuming the key is the cause.
