@@ -90,6 +90,48 @@ Install Hermes as the `hermes` user:
 curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 ```
 
+## SSH Shell Setup and Coolify Environment Variables
+
+The Hermes home directory is `/opt/data`. For initial shell setup, copy `.bashrc`
+and `.profile` from `/etc/skel` into that directory. Run these commands inside the
+Hermes container as the `hermes` user. Existing files are preserved as numbered
+backups; merge any customizations from those backups afterward.
+
+```bash
+sudo cp --backup=numbered /etc/skel/.bashrc /opt/data/.bashrc
+sudo cp --backup=numbered /etc/skel/.profile /opt/data/.profile
+sudo chown hermes:hermes /opt/data/.bashrc /opt/data/.profile
+```
+
+Coolify injects container environment variables into PID 1, but SSH login shells
+do not automatically inherit them. Append the following Bash snippet to
+`/opt/data/.bashrc`, after its existing contents. The Ubuntu `.profile` sources
+`.bashrc` for Bash login shells.
+
+```bash
+# Container env (set in Coolify) on PID 1; SSH login shells don't inherit it.
+# Imports every variable the shell doesn't already have, so PATH, HOME etc. stay the shell's own.
+while IFS= read -r -d '' kv; do
+    name=${kv%%=*}
+    [[ $name =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    [[ -n ${!name+x} ]] || export "$kv"
+done < <(sudo -n cat /proc/1/environ 2>/dev/null)
+unset kv name
+```
+
+This uses the container's existing passwordless sudo configuration to read PID 1's
+environment. Add the snippet once; do not put it directly in `.profile`, since it
+uses Bash-specific syntax. Apply it to the current Bash shell with:
+
+```bash
+source /opt/data/.bashrc
+```
+
+The shell files persist in the `hermes-data` volume. After changing Coolify
+environment variables, redeploy the container and open a new SSH session to load
+the updated values. Existing shell variables, including empty ones, are not
+overwritten by this snippet.
+
 ## Troubleshooting: Container Keeps Restarting
 
 If the Hermes container keeps restarting, check its logs for a Tailscale
