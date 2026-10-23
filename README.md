@@ -139,41 +139,71 @@ from the Hermes container, with network/firewall and `pg_hba.conf` rules allowin
 the connection. For separate Coolify resources, attach them to a shared Docker
 network and use the database's hostname on that network.
 
-### Create the role, database, and extension
+### Create the role, database, and extension in pgAdmin
 
-Connect to the external server's `postgres` database as an administrator using
-`psql`, for example from its Coolify terminal. For a remote connection, replace
-the hostname and administrator name and use the server's TLS settings:
+The following blocks contain plain SQL for the **pgAdmin Query Tool**. Run each
+block separately and continue only after it succeeds.
 
-```bash
-psql "host=postgres.internal port=5432 dbname=postgres user=postgres sslmode=require" -W
-```
-
-Run the following once for a **new** role and database. The backslash commands are
-`psql` commands; in a graphical SQL editor, set the role's password and reconnect
-to the `hermes` database separately. Do not wrap `CREATE DATABASE` in a transaction.
+1. Connect to the external server as an administrator. In the object browser,
+   right-click the existing **postgres** database and open **Query Tool**.
+   Enable **Auto-commit** in the Query Tool. If a previous query left an open or
+   failed transaction, finish it first; use `ROLLBACK;` to discard an unsuccessful
+   setup attempt before proceeding.
+2. Create the login role. Replace the password placeholder with a long, random
+   password using letters, digits, `-`, `.`, `_`, and `~`, matching the generated
+   connection URL described below:
 
 ```sql
-\set ON_ERROR_STOP on
+CREATE ROLE hermes WITH
+    LOGIN
+    NOSUPERUSER
+    NOCREATEDB
+    NOCREATEROLE
+    NOREPLICATION
+    PASSWORD 'REPLACE_WITH_A_LONG_RANDOM_PASSWORD';
+```
 
-CREATE ROLE hermes WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
-\password hermes
+If the role already exists from an earlier attempt, skip `CREATE ROLE`. To set
+its password, run this separately with the chosen password instead:
 
+```sql
+ALTER ROLE hermes WITH PASSWORD 'REPLACE_WITH_A_LONG_RANDOM_PASSWORD';
+```
+
+3. Still connected to **postgres**, run **only this statement** in its own
+   execution. `CREATE DATABASE` must run with Auto-commit on, outside a transaction
+   and without other SQL statements in the same execution:
+
+```sql
 CREATE DATABASE hermes OWNER hermes;
-GRANT CONNECT, TEMPORARY ON DATABASE hermes TO hermes;
+```
 
-\connect hermes
+If the database already exists, skip creation and verify its owner in pgAdmin's
+database properties. This walkthrough assumes `hermes` owns the database.
 
+4. Refresh **Databases** in pgAdmin's object browser. Right-click the new
+   **hermes** database and open a **new Query Tool** as the administrator. Creating
+   a database does not switch an existing query tab's connection. First check:
+
+```sql
+SELECT current_database(), current_user;
+```
+
+The database must be `hermes`, and the user must still be the administrator.
+Then enable pgvector and grant the application privileges **in this database**:
+
+```sql
 CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public;
+GRANT CONNECT, TEMPORARY ON DATABASE hermes TO hermes;
 GRANT USAGE, CREATE ON SCHEMA public TO hermes;
 
 SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';
 ```
 
-`\password` prompts for the new role's password. Enable the extension as the
-administrator **in the target database**; installing pgvector on the server is
-not enough. On managed PostgreSQL, use the provider's extension-enabled admin
-role. The Hermes role does not need superuser privileges.
+Installing pgvector on the server is not enough: enable the extension in each
+target database. On managed PostgreSQL, use the provider's extension-enabled
+admin role. The Hermes role does not need superuser privileges. If the extension
+is unavailable, install pgvector for the server's PostgreSQL version first.
 
 Hermes owns this database and must create its application tables and indexes as
 `hermes`. It then owns those objects and can migrate them without additional
@@ -234,17 +264,17 @@ Compose merges would retain the local database.
 
 ### Verify access as the Hermes role
 
-Connect from a client on the same network as Hermes, using the application's role:
+In pgAdmin, open the Query Tool's connection dropdown and choose **New Connection**.
+Select the same server and database **hermes**, but use **hermes** as the login
+user with the application password, rather than the administrator. Use the
+server's required TLS settings. The pgAdmin server must be able to reach the
+database; its successful connection does not also prove Hermes's container has
+network access.
 
-```bash
-psql "host=postgres.internal port=5432 dbname=hermes user=hermes sslmode=require" -W
-```
-
-Run this check in that session. It verifies table/index creation, sequence use,
-and vector operations, and rolls back the test objects:
+Run this check in the new connection. It verifies table/index creation, sequence
+use, and vector operations, and rolls back the test objects:
 
 ```sql
-\set ON_ERROR_STOP on
 SELECT current_user, current_database();
 SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';
 
@@ -267,6 +297,8 @@ References: [PostgreSQL role creation](https://www.postgresql.org/docs/17/sql-cr
 [database creation](https://www.postgresql.org/docs/17/sql-createdatabase.html),
 [privileges](https://www.postgresql.org/docs/17/sql-grant.html), and
 [pgvector installation and usage](https://github.com/pgvector/pgvector).
+For connection switching and executing selected SQL, see the
+[pgAdmin Query Tool documentation](https://www.pgadmin.org/docs/pgadmin4/latest/query_tool.html).
 
 ## Local Start
 
