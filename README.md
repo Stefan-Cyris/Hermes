@@ -7,6 +7,7 @@ Standalone Hermes deployment for Coolify.
 - `Dockerfile` builds the Hermes remote box image with Tailscale, SSH, Node, Python, uv, GitHub CLI, and Hermes runtime prerequisites.
 - `.github/workflows/publish-image.yml` builds that image in GitHub Actions and publishes it to GHCR.
 - `docker-compose.yml` pulls the published Hermes image and starts it with a PostgreSQL 17 pgvector sidecar. Coolify does not build the image.
+- `docker-compose.base.yml` starts only the Hermes box, using an external PostgreSQL server. It is a standalone alternative to `docker-compose.yml`.
 
 ## Required Environment
 
@@ -40,8 +41,11 @@ If Coolify expects the compose path without a leading slash, use:
 docker-compose.yml
 ```
 
-Do not deploy this as a Nixpacks app on port 3000. This repository runs a
-Docker Compose stack with the Hermes box and a PostgreSQL sidecar.
+For an external PostgreSQL server, set **Docker Compose Location** to
+`/docker-compose.base.yml` instead; see the external database setup below.
+
+Do not deploy this as a Nixpacks app on port 3000. Both variants run as a
+Docker Compose application and pull the Hermes image from GHCR.
 
 ### GHCR image and rollout
 
@@ -60,8 +64,11 @@ For the first rollout and subsequent image updates:
 
 1. Push the changes to `main` and wait for **Publish image** in GitHub Actions to
    finish successfully before pressing **Deploy** in Coolify.
-2. Refresh the existing resource's Compose configuration from `docker-compose.yml`.
-   If Coolify stores the Compose file directly, paste the updated file there.
+2. Refresh the existing resource's Compose configuration using **Reload Compose**.
+   Its **Docker Compose Location** selects `/docker-compose.yml` (with PostgreSQL)
+   or `/docker-compose.base.yml` (external PostgreSQL). The editor is read-only for
+   Git-based resources: change the file in the repository, then reload it in Coolify.
+   Only resources created as **Docker Compose Empty** accept a pasted Compose file.
    Keep the same resource and its existing volumes to retain Hermes, Tailscale,
    and PostgreSQL data.
 3. Reuse the GHCR login already configured for Zwistory on the deployment server.
@@ -73,9 +80,10 @@ For the first rollout and subsequent image updates:
 5. Press **Deploy**. The Hermes service has no `build:` section, and
    `pull_policy: always` fetches the current image on each deployment.
 
-There is no need to recreate the resource or switch it to a single-image app:
-the PostgreSQL sidecar stays in the same Compose stack. After the initial update,
-refresh the Compose configuration only when that file changes.
+There is no need to recreate the resource or switch it to a single-image app.
+The default file includes the PostgreSQL sidecar; the base file omits it.
+After the initial update, refresh the Compose configuration when the selected
+file changes.
 
 Optionally set `HERMES_IMAGE` in Coolify to an existing SHA tag for a rollback or
 test deployment:
@@ -104,8 +112,8 @@ Optional SSH password fallback:
 HERMES_SSH_PASSWORD=change-this-long-password
 ```
 
-Tailscale needs these container options. They are already defined in
-`docker-compose.yml`:
+Tailscale needs these container options. They are already defined in both
+Compose files:
 
 ```text
 --cap-add=NET_ADMIN --cap-add=NET_RAW --device=/dev/net/tun:/dev/net/tun --tmpfs=/run --tmpfs=/tmp
@@ -168,21 +176,24 @@ assign the application objects' ownership to `hermes`.
 
 ### Point the Compose resource at the external database
 
-The repository's default Compose file still uses the local sidecar. In the
-existing Coolify resource's Compose configuration:
+Use the ready-made `docker-compose.base.yml`. It contains only Hermes, with no
+PostgreSQL service, database volume declaration, or local database dependency.
+It reads the external connection details from Coolify's runtime variables.
 
-1. Remove the `postgres` service and the Hermes service's `depends_on` block.
-2. Remove the now-unused top-level `hermes-postgres-data` volume declaration.
-   Keep `hermes-data` and `hermes-tailscale-state`. Do not delete the old database
-   volume if it contains data you still need; this setup does not migrate data.
-3. Replace these three entries under `services.hermes.environment`, keeping the
-   other environment entries:
+In the **existing** Hermes resource, open **General → Build pipeline**, change
+**Docker Compose Location** to `/docker-compose.base.yml`, save, and click
+**Reload Compose**. Keep the Git source, branch, and base directory unchanged.
+The Compose editor stays read-only because Git is the source of truth.
 
-```yaml
-HERMES_POSTGRES_HOST: ${HERMES_POSTGRES_HOST:?set HERMES_POSTGRES_HOST}
-HERMES_POSTGRES_PORT: ${HERMES_POSTGRES_PORT:-5432}
-HERMES_DATABASE_URL: ${HERMES_DATABASE_URL:?set HERMES_DATABASE_URL}
-```
+Keep the same resource so its `hermes-data` and `hermes-tailscale-state` volumes
+retain their identity. Before deploying, check **Show Deployable Compose** or
+**Persistent Storage** to confirm those mounts are unchanged. Do not delete the
+old PostgreSQL volume if it contains data you still need; switching files does
+not migrate database contents.
+
+If PostgreSQL is another Coolify resource, enable **Advanced → Docker compose →
+Predefined network → Connect to predefined network** for Hermes when needed to
+reach that resource, and use its actual hostname on the shared network.
 
 Set the matching runtime variables in Coolify, using the password entered above:
 
@@ -200,6 +211,11 @@ variables. Percent-encode special characters in the URL's password (for example,
 `@` becomes `%40`); keep the separate password variable unencoded. Use the
 provider's TLS settings, including a CA certificate when required. Save and
 redeploy, then open a new SSH session if using the shell environment import below.
+
+The base file requires `TS_AUTHKEY`, `HERMES_POSTGRES_HOST`,
+`HERMES_POSTGRES_PASSWORD`, and `HERMES_DATABASE_URL`. Port defaults to `5432`,
+user and database to `hermes`. Select only the base file; do not combine it with
+`docker-compose.yml`, because Compose merges would retain the local database.
 
 ### Verify access as the Hermes role
 
@@ -244,6 +260,14 @@ On an ARM64 Docker host with GHCR access, after the first image has been publish
 ```powershell
 docker compose up -d
 docker compose logs -f hermes
+```
+
+For the base variant, set the external database variables above and select it
+explicitly:
+
+```powershell
+docker compose -f docker-compose.base.yml up -d
+docker compose -f docker-compose.base.yml logs -f hermes
 ```
 
 For a local image build on your own architecture, the Dockerfile remains available:

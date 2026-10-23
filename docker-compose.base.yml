@@ -1,0 +1,52 @@
+# Hermes remote box with an external PostgreSQL server; no database sidecar.
+# This is a standalone Compose file, not an override for docker-compose.yml.
+# Coolify: Docker Compose Location = /docker-compose.base.yml
+# Manual start: docker compose -f docker-compose.base.yml up -d
+#
+# Required environment:
+#   TS_AUTHKEY, HERMES_POSTGRES_HOST, HERMES_POSTGRES_PASSWORD, HERMES_DATABASE_URL
+# Keep the URL consistent with the individual PostgreSQL settings. Percent-encode
+# the URL password; HERMES_POSTGRES_PASSWORD contains the raw password.
+# Optional settings match docker-compose.yml; PostgreSQL port defaults to 5432,
+# user and database to hermes. See README.md for setup and Coolify networking.
+services:
+  hermes:
+    image: ${HERMES_IMAGE:-ghcr.io/stefan-cyris/hermes:main}
+    pull_policy: always
+    container_name: hermes
+    hostname: hermes
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    tmpfs:
+      - /run
+      - /tmp
+    ports:
+      - "127.0.0.1:${HERMES_SSH_PORT:-2222}:22"
+    volumes:
+      - hermes-data:/opt/data
+      - hermes-tailscale-state:/var/lib/tailscale
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:?set TS_AUTHKEY}
+      TS_HOSTNAME: ${TS_HOSTNAME:-hermes}
+      TZ: Europe/Berlin
+      HERMES_HOME: /opt/data
+      HERMES_POSTGRES_HOST: ${HERMES_POSTGRES_HOST:?set HERMES_POSTGRES_HOST}
+      HERMES_POSTGRES_PORT: ${HERMES_POSTGRES_PORT:-5432}
+      HERMES_POSTGRES_USER: ${HERMES_POSTGRES_USER:-hermes}
+      HERMES_POSTGRES_PASSWORD: ${HERMES_POSTGRES_PASSWORD:?set HERMES_POSTGRES_PASSWORD} # pragma: allowlist secret
+      HERMES_POSTGRES_DB: ${HERMES_POSTGRES_DB:-hermes}
+      HERMES_DATABASE_URL: ${HERMES_DATABASE_URL:?set HERMES_DATABASE_URL} # pragma: allowlist secret
+      HERMES_SSH_PASSWORD: ${HERMES_SSH_PASSWORD:-} # pragma: allowlist secret
+    healthcheck:
+      test: ["CMD", "tailscale", "status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  hermes-data:
+  hermes-tailscale-state:
