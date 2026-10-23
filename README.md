@@ -50,10 +50,14 @@ Docker Compose application and pull the Hermes image from GHCR.
 ### GHCR image and rollout
 
 This follows Zwistory's deployment pattern: GitHub Actions builds a Linux ARM64
-image on a native ARM runner for the Coolify host. Each push to `main` publishes
-`ghcr.io/stefan-cyris/hermes:main` and `ghcr.io/stefan-cyris/hermes:sha-<full-commit-sha>`.
-The workflow can also be started manually. A manual run on another branch only
-publishes its SHA tag and does not replace `:main`.
+image on a native ARM runner for the Coolify host. Pushes to `main` that change
+`Dockerfile` or `.dockerignore` publish `ghcr.io/stefan-cyris/hermes:main` and
+`ghcr.io/stefan-cyris/hermes:sha-<full-commit-sha>`.
+Compose, README, and workflow-only changes do not automatically rebuild the image;
+they reuse the last published image. Such commits do not get a new image SHA tag.
+The workflow can also be started manually, for example after changing build flags
+in the workflow or to update packages installed by the Dockerfile. A manual run
+on another branch only publishes its SHA tag and does not replace `:main`.
 
 The registry build cache reuses unchanged Dockerfile layers between workflow runs.
 The first build populates the cache and still takes the full build time. GitHub
@@ -62,8 +66,11 @@ personal token is needed in this repository.
 
 For the first rollout and subsequent image updates:
 
-1. Push the changes to `main` and wait for **Publish image** in GitHub Actions to
-   finish successfully before pressing **Deploy** in Coolify.
+1. Push the changes to `main`. If `Dockerfile` or `.dockerignore` changed, wait for
+   **Publish image** in GitHub Actions to finish successfully before pressing
+   **Deploy** in Coolify. Compose-only changes need no new image build. For the
+   first deployment, ensure an image has been published; start the workflow manually
+   if necessary.
 2. Refresh the existing resource's Compose configuration using **Reload Compose**.
    Its **Docker Compose Location** selects `/docker-compose.yml` (with PostgreSQL)
    or `/docker-compose.base.yml` (external PostgreSQL). The editor is read-only for
