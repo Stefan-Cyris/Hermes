@@ -4,9 +4,9 @@
 # Manual start: docker compose -f docker-compose.base.yml up -d
 #
 # Required environment:
-#   TS_AUTHKEY, HERMES_POSTGRES_HOST, HERMES_POSTGRES_PASSWORD, HERMES_DATABASE_URL
-# Keep the URL consistent with the individual PostgreSQL settings. Percent-encode
-# the URL password; HERMES_POSTGRES_PASSWORD contains the raw password.
+#   TS_AUTHKEY, HERMES_POSTGRES_HOST, HERMES_POSTGRES_PASSWORD
+# HERMES_DATABASE_URL is assembled from the PostgreSQL settings below, just as
+# in docker-compose.yml. There is no separate URL setting to maintain.
 # Optional settings match docker-compose.yml; PostgreSQL port defaults to 5432,
 # user and database to hermes. See README.md for setup and Coolify networking.
 services:
@@ -39,7 +39,7 @@ services:
       HERMES_POSTGRES_USER: ${HERMES_POSTGRES_USER:-hermes}
       HERMES_POSTGRES_PASSWORD: ${HERMES_POSTGRES_PASSWORD:?set HERMES_POSTGRES_PASSWORD} # pragma: allowlist secret
       HERMES_POSTGRES_DB: ${HERMES_POSTGRES_DB:-hermes}
-      HERMES_DATABASE_URL: ${HERMES_DATABASE_URL:?set HERMES_DATABASE_URL} # pragma: allowlist secret
+      HERMES_DATABASE_URL: postgresql://${HERMES_POSTGRES_USER:-hermes}:${HERMES_POSTGRES_PASSWORD:?set HERMES_POSTGRES_PASSWORD}@${HERMES_POSTGRES_HOST:?set HERMES_POSTGRES_HOST}:${HERMES_POSTGRES_PORT:-5432}/${HERMES_POSTGRES_DB:-hermes} # pragma: allowlist secret
       HERMES_SSH_PASSWORD: ${HERMES_SSH_PASSWORD:-} # pragma: allowlist secret
     healthcheck:
       test: ["CMD", "tailscale", "status"]

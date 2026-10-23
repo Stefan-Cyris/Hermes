@@ -210,19 +210,27 @@ HERMES_POSTGRES_PORT=5432
 HERMES_POSTGRES_USER=hermes
 HERMES_POSTGRES_PASSWORD=<raw-password>
 HERMES_POSTGRES_DB=hermes
-HERMES_DATABASE_URL=postgresql://hermes:<url-encoded-password>@postgres.internal:5432/hermes?sslmode=require
 ```
 
-The host, port, user, password, and database in the URL must match the individual
-variables. Percent-encode special characters in the URL's password (for example,
-`@` becomes `%40`); keep the separate password variable unencoded. Use the
-provider's TLS settings, including a CA certificate when required. Save and
-redeploy, then open a new SSH session if using the shell environment import below.
+These variables expose the connection details to tools in the container. The
+startup script does not open a PostgreSQL connection or configure a database
+integration automatically; configure each tool to use the settings it supports.
+As in `docker-compose.yml`, Compose automatically assembles `HERMES_DATABASE_URL`
+from host, port, user, password, and database and exposes it inside the container.
+Do not set `HERMES_DATABASE_URL` separately in Coolify; remove an old manual entry
+and use **Reload Compose** to load the updated definition.
 
-The base file requires `TS_AUTHKEY`, `HERMES_POSTGRES_HOST`,
-`HERMES_POSTGRES_PASSWORD`, and `HERMES_DATABASE_URL`. Port defaults to `5432`,
-user and database to `hermes`. Select only the base file; do not combine it with
-`docker-compose.yml`, because Compose merges would retain the local database.
+Both Compose files interpolate credentials directly without URL encoding. Use
+a long password consisting of URL-unreserved characters (letters, digits,
+`-`, `.`, `_`, `~`) so the same value works as a raw password and in the generated
+URL. Configure TLS using the consuming tool's supported settings and the
+provider's requirements, including a CA certificate when needed. Save and redeploy,
+then open a new SSH session if using the shell environment import below.
+
+The base file requires `TS_AUTHKEY`, `HERMES_POSTGRES_HOST`, and
+`HERMES_POSTGRES_PASSWORD`. Port defaults to `5432`, user and database to `hermes`.
+Select only the base file; do not combine it with `docker-compose.yml`, because
+Compose merges would retain the local database.
 
 ### Verify access as the Hermes role
 
