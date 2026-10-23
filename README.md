@@ -56,8 +56,8 @@ image on a native ARM runner for the Coolify host. Pushes to `main` that change
 Compose, README, and workflow-only changes do not automatically rebuild the image;
 they reuse the last published image. Such commits do not get a new image SHA tag.
 The workflow can also be started manually, for example after changing build flags
-in the workflow or to update packages installed by the Dockerfile. A manual run
-on another branch only publishes its SHA tag and does not replace `:main`.
+in the workflow. Manual runs still use the build cache. A manual run on another
+branch only publishes its SHA tag and does not replace `:main`.
 
 The registry build cache reuses unchanged Dockerfile layers between workflow runs.
 The first build populates the cache and still takes the full build time. GitHub
