@@ -2,12 +2,13 @@
 # Docker Compose for the Hermes remote box.
 #
 # Deploy via Coolify as a Docker Compose resource, or manually:
-#   docker compose up -d --build
+#   docker compose up -d
 #
 # Required env vars:
 #   TS_AUTHKEY  — reusable Tailscale auth key from https://login.tailscale.com/admin/settings/keys
 #
 # Optional env vars:
+#   HERMES_IMAGE            — defaults to ghcr.io/stefan-cyris/hermes:main
 #   TS_HOSTNAME             — Tailscale hostname, defaults to hermes
 #   HERMES_SSH_PORT         — localhost OpenSSH fallback port, defaults to 2222
 #   HERMES_POSTGRES_USER    — defaults to hermes
@@ -21,10 +22,8 @@
 #
 services:
   hermes:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: hermes-prod:local
+    image: ${HERMES_IMAGE:-ghcr.io/stefan-cyris/hermes:main}
+    pull_policy: always
     container_name: hermes
     hostname: hermes
     restart: unless-stopped

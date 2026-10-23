@@ -1,0 +1,63 @@
+name: Publish image
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build and push the Hermes image
+    # Same native ARM64 runner as Zwistory, matching the Coolify host.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/stefan-cyris/hermes
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Log in to GHCR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GITHUB_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Set up the build cache
+        run: docker buildx create --use --driver docker-container
+
+      - name: Build and push the image
+        shell: bash
+        run: |
+          tags=(--tag "$IMAGE:sha-$GITHUB_SHA")
+          cache=()
+          # Manual branch builds must not replace the production tag or cache.
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
+            tags+=(--tag "$IMAGE:main")
+            cache+=(--cache-to "type=registry,ref=$IMAGE:buildcache,mode=max")
+          fi
+          docker buildx build \
+            --platform linux/arm64 \
+            --cache-from "type=registry,ref=$IMAGE:buildcache" \
+            "${cache[@]}" \
+            --label org.opencontainers.image.source=https://github.com/Stefan-Cyris/Hermes \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            "${tags[@]}" \
+            --push .
+
+      - name: Print the pushed tags
+        run: |
+          echo "Pushed $IMAGE:sha-$GITHUB_SHA"
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
+            echo "Pushed $IMAGE:main"
+          fi
